@@ -1,0 +1,82 @@
+﻿@page "/"
+@using BlazorWasmBrasilApiCep.Models
+@inject HttpClient Http
+
+<PageTitle>Consulta de CEP</PageTitle>
+
+<div class="container mt-4" style="max-width: 600px;">
+    <h1 class="mb-4">Consulta de CEP</h1>
+
+    <div class="input-group mb-3">
+        <input class="form-control" placeholder="Digite o CEP (somente números)"
+               maxlength="8" @bind="cep" @bind:event="oninput"
+               @onkeydown="OnKeyDown" />
+        <button class="btn btn-primary" @onclick="BuscarCep" disabled="@carregando">
+            @(carregando ? "Buscando..." : "Buscar")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(erro))
+    {
+        <div class="alert alert-danger">@erro</div>
+    }
+
+    @if (resultado is not null)
+    {
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">CEP @resultado.Cep</h5>
+                <p class="mb-1"><strong>Rua:</strong> @resultado.Street</p>
+                <p class="mb-1"><strong>Bairro:</strong> @resultado.Neighborhood</p>
+                <p class="mb-1"><strong>Cidade:</strong> @resultado.City</p>
+                <p class="mb-0"><strong>Estado:</strong> @resultado.State</p>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string cep = string.Empty;
+    private CepResponse? resultado;
+    private string? erro;
+    private bool carregando;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await BuscarCep();
+    }
+
+    private async Task BuscarCep()
+    {
+        erro = null;
+        resultado = null;
+
+        var cepLimpo = new string(cep.Where(char.IsDigit).ToArray());
+        if (cepLimpo.Length != 8)
+        {
+            erro = "Informe um CEP válido com 8 dígitos.";
+            return;
+        }
+
+        carregando = true;
+        try
+        {
+            var response = await Http.GetAsync($"api/cep/v1/{cepLimpo}");
+
+            if (response.IsSuccessStatusCode)
+                resultado = await response.Content.ReadFromJsonAsync<CepResponse>();
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                erro = "CEP não encontrado.";
+            else
+                erro = $"Erro ao consultar a API ({(int)response.StatusCode}).";
+        }
+        catch (HttpRequestException)
+        {
+            erro = "Falha de conexão com a BrasilAPI.";
+        }
+        finally
+        {
+            carregando = false;
+        }
+    }
+}
